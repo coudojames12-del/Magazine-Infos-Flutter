@@ -1,34 +1,83 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+// Importation des outils de test de Flutter
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-// import 'package:activite3/main.dart';
+// Importation du fichier principal de l'application
 import 'package:activite3/main.dart';
+// Importation des dépendances nécessaires pour la simulation de DB
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+// Initialise sqflite_ffi pour que les tests puissent utiliser la DB
+void sqfliteTestInit() {
+  // Initialise l'interface ffi pour les tests desktop
+  sqfliteFfiInit();
+  // Utilise l'implémentation ffi pour les tests
+  databaseFactory = databaseFactoryFfi;
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    // await tester.pumpWidget(const MonAppli());
-    await tester.pumpWidget(const MonAppli());
+  // Initialisation de la base de données en mémoire pour le test
+  // Doit être appelé avant les tests qui interagissent avec la DB
+  sqfliteTestInit();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('Magazine Infos'), findsOneWidget);
+  // Test 1: Vérifie le démarrage de l'application et l'affichage des éléments de base
+  testWidgets('L\'application démarre et affiche les champs de saisie', (
+    WidgetTester tester,
+  ) async {
+    // 1. Démarrage
+    await tester.pumpWidget(const MonApplication());
 
-    expect(find.byIcon(Icons.menu), findsOneWidget);
-    expect(find.byIcon(Icons.search), findsOneWidget);
+    // 2. Vérification des éléments de l'interface
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.text('Click'));
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // Vérifie le titre de l'AppBar
+    expect(find.text('Gestion des rédacteurs'), findsOneWidget);
 
-    // Verify that our counter has incremented.
-    expect(find.text('CLICK'), findsOneWidget);
+    // Vérifie les champs de saisie
+    expect(find.byType(TextField), findsNWidgets(3)); // Nom, Prénom, Email
+    expect(find.widgetWithText(TextField, 'Nom'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Prénom'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Email'), findsOneWidget);
+
+    // Vérifie le bouton d'ajout
+    expect(find.text('Ajouter un Rédacteur'), findsOneWidget);
+
+    // Vérifie le message "Aucun rédacteur" (car la DB est vide au départ)
+    expect(
+      find.text("Aucun rédacteur enregistré pour le moment."),
+      findsOneWidget,
+    );
+  });
+
+  // Test 2: Simule l'ajout d'un rédacteur
+  testWidgets('L\'ajout d\'un rédacteur met à jour la liste', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const MonApplication());
+
+    // 1. Entrer les données dans les champs de texte
+    await tester.enterText(find.widgetWithText(TextField, 'Nom'), 'Dupont');
+    await tester.enterText(find.widgetWithText(TextField, 'Prénom'), 'Jean');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Email'),
+      'jean.dupont@test.com',
+    );
+
+    // 2. Appuyer sur le bouton d'ajout
+    await tester.tap(find.text('Ajouter un Rédacteur'));
+
+    // 3. Déclenche un frame pour que l'ajout, l'insertion en DB et le refresh s'exécutent
+    // On utilise pumpAndSettle pour attendre que toutes les animations/microtasks soient terminées
+    await tester.pumpAndSettle();
+
+    // 4. Vérification
+    // Le message "Aucun rédacteur" doit disparaître
+    expect(
+      find.text("Aucun rédacteur enregistré pour le moment."),
+      findsNothing,
+    );
+
+    // L'élément ajouté doit être visible dans le ListView
+    expect(find.text('Dupont Jean'), findsOneWidget);
+    expect(find.text('jean.dupont@test.com'), findsOneWidget);
   });
 }
